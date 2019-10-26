@@ -1,25 +1,46 @@
 class Card {
-  constructor(name, link) {
-    this.cardMarkup = this.create(name, link);
+  constructor(cardObj) {
+    this.card = cardObj;
   };
   
   like(event) {
-    event.target.classList.toggle('place-card__like-icon_liked');
+    const card = event.target.parentElement.parentElement.parentElement;
+    const likeButton = event.target;
+
+    if (likeButton.classList.contains('place-card__like-icon_liked')) {
+      likeButton.classList.remove('place-card__like-icon_liked');      
+
+      api.removeLike(card.getAttribute('data-id'))
+        .then(resp => likeButton.nextElementSibling.textContent = resp.likes.length);
+    } else {
+      likeButton.classList.add('place-card__like-icon_liked');
+      
+      api.putLike(card.getAttribute('data-id'))
+        .then(resp => likeButton.nextElementSibling.textContent = resp.likes.length);
+    }
   }
 
-  remove(event) {
-    event.target.parentElement.parentElement.remove();
+  delete(event) {
+    const card = event.target.parentElement.parentElement;
+
+    if (window.confirm('Вы действительно хотите удалить эту карточку?')) {
+      card.remove();
+      api.deleteCard(card.getAttribute('data-id'));
+    }
   }
 
-  create(nameValue, linkValue) {
+  create() {
     return `
-    <div class="place-card">
-      <div class="place-card__image" style="background-image: url(${linkValue})" data-target="popupImg">
-        <button class="place-card__delete-icon"></button>
+    <div class="place-card" data-id="${this.card._id}">
+      <div class="place-card__image" style="background-image: url(${this.card.link})" data-target="popupImg">
+        ${api.renderOwner(this.card)? `<button class="place-card__delete-icon"></button>` :``}
       </div>
       <div class="place-card__description">
-        <h3 class="place-card__name">${nameValue}</h3>
-        <button class="place-card__like-icon"></button>
+        <h3 class="place-card__name">${this.card.name}</h3>
+        <div class="place-card__like-container">
+          <button class="place-card__like-icon ${api.renderLiked(this.card)? 'place-card__like-icon_liked':''}"></button>
+          <p class="place-card__number-of-likes">${this.card.likes.length}</p>
+        </div>
       </div>
     </div> 
     `;
@@ -38,19 +59,17 @@ class CardList {
   constructor(container, initialCards) {
     this.container = container;
     this.initialCards = initialCards;
-    // this.cards = [];
     this.render();
   }
 
-  addCard(name, link) {
-    const {cardMarkup} = new Card(name, link);
+  addCard(cardObj) {
+    const cardMarkup = new Card(cardObj).create();
 
-    // this.cards.push(cardElement);
     this.container.insertAdjacentHTML('beforeend', cardMarkup);
   }
 
   render() {
-    this.initialCards.forEach(element => this.addCard(element.name, element.link));
+    this.initialCards.forEach(element => this.addCard(element));
   }
 }
 
@@ -60,6 +79,7 @@ class Popup {
     
     this.userName = document.querySelector('.user-info__name');
     this.userAbout = document.querySelector('.user-info__job');
+    this.userAvatar = document.querySelector('.user-info__photo');
   }
   
   getForm() {
@@ -88,113 +108,6 @@ class Popup {
     this.popupById.classList.remove('popup_is-opened');
   }
   
-  formSubmit(event) {    
-    event.preventDefault();
-    this.getForm();
-    
-    switch (this.popupById.id) {
-      case 'popupAdd':
-        places.addCard(this.form.elements.name.value, this.form.elements.link.value);
-        api.uploadCard(this.form.elements.name.value, this.form.elements.link.value)
-          .finally(() => this.close(event));   
-        // this.close(event);     
-        break;
-      case 'popupEdit':
-        this.userName.textContent = this.form.elements.person.value;
-        this.userAbout.textContent = this.form.elements.about.value;
-        api.uploadUserInfo(this.userName.textContent, this.userAbout.textContent)
-          .finally(() => this.close(event));
-        break;
-    };
-    // this.close(event); 
-  }
-}
-
-class Api {
-  constructor(options) {
-    this.headers = options.headers;
-    this.baseUrl = options.baseUrl;
-  }
-
-  updateUserInfo(objectWithNewInfo) {
-    const userName = document.querySelector('.user-info__name');
-    const userAbout = document.querySelector('.user-info__job');
-    const userAvatar = document.querySelector('.user-info__photo');
-  
-    userName.textContent = objectWithNewInfo.name;
-    userAbout.textContent = objectWithNewInfo.about;
-    userAvatar.setAttribute('style', `background-image: url(${objectWithNewInfo.avatar})`)
-  }
-
-  getInitialCards() {
-    fetch(`${this.baseUrl}/cards`, {
-      method: 'get',
-      headers: this.headers
-    })
-    .then(res => {
-      if (res.ok) {
-        return res.json()
-      }
-      return Promise.reject(`Ошибка: ${res.status}`)
-    })
-    .then(res => {
-      places = new CardList(document.querySelector('.places-list'), res);
-      places.cards = res;
-      // console.log(places);
-    })
-    .catch((err) => console.log(err))
-  }
-
-  getUserInfo() { 
-    fetch(`${this.baseUrl}/users/me`, {
-      methid: 'get',
-      headers: this.headers
-    })
-      .then(response => {
-        if (response.ok) {
-          return response.json()
-        }
-        return Promise.reject(`Ошибка: ${response.status}`)
-      })
-      .then(object => this.updateUserInfo(object))
-      .catch((err) => console.log(err))
-  }
-  
-  uploadUserInfo(newName, newAbout) {
-    this.renderLoading(true);
-    return fetch(`${this.baseUrl}/users/me`, {
-      method: 'PATCH',
-      headers: this.headers,
-      body: JSON.stringify({
-          name: newName,
-          about: newAbout
-      })
-    })
-    .finally(() => this.renderLoading(false));
-  }
-  
-  uploadCard(name, link) {
-    // this.renderLoading(true);
-    return fetch(`${this.baseUrl}/cards`, {
-      method: 'POST',
-      headers: this.headers,
-      body: JSON.stringify({
-        name: name,
-        link: link
-      })
-    })
-    .then((res) => console.log(res))
-    // .finally(() => this.renderLoading(false));
-  }
-  
-  deleteCard(cardId) {
-    fetch(`${this.baseUrl}/cards/${cardId}`, {
-    method: 'DELETE',
-    headers: this.headers
-    })
-    .then(res => res.json());
-  }
-
   renderLoading(isLoading) {
     const popupOpened = document.querySelector('.popup_is-opened');
     const button = popupOpened.querySelector('.popup__button');
@@ -204,13 +117,241 @@ class Api {
     } else {
       if (popupOpened.id === 'popupAdd') {
         button.textContent = '+';
+      } else {
+        button.textContent = 'Сохранить';
       }
-      if (popupOpened.id === 'popupEdit') {
-        button.textContent = 'Сохранить'
+    }
+  }
+
+  updateUserInfo(objectWithNewInfo) {  
+    this.userName.textContent = objectWithNewInfo.name;
+    this.userAbout.textContent = objectWithNewInfo.about;
+    this.userAvatar.setAttribute('style', `background-image: url(${objectWithNewInfo.avatar})`)
+  }
+
+  formSubmit(event) {    
+    event.preventDefault();
+    this.getForm();
+    
+    switch (this.popupById.id) {
+      case 'popupAdd':
+        this.renderLoading(true);
+        api.uploadCard(this.form.elements.name.value, this.form.elements.link.value)
+          .then(() => api.getInitialCards())
+          .then(res => places.addCard(res.pop()))
+          .then(() => this.renderLoading(false))
+          .finally(() => this.close(event));   
+        break;
+      case 'popupEdit':
+        this.userName.textContent = this.form.elements.person.value;
+        this.userAbout.textContent = this.form.elements.about.value;
+        api.uploadUserInfo(this.userName.textContent, this.userAbout.textContent)
+          .finally(() => this.close(event));
+        break;
+      case 'popupAvatar':
+        this.userAvatar.setAttribute('style',`background-image: url(${this.form.elements.linkAvatar.value})`);
+        api.uploadUserAvatar(this.form.elements.linkAvatar.value)
+          .finally(() => this.close(event));
+        break;
+    };
+  }
+}
+
+class Api {
+  constructor(options) {
+    this.headers = options.headers;
+    this.baseUrl = options.baseUrl;
+  }
+
+  getInitialCards() {
+    return fetch(`${this.baseUrl}/cards`, {
+      method: 'GET',
+      headers: this.headers
+    })
+      .then(res => {
+        if (res.ok) {
+          return res.json()
+        }
+        return Promise.reject(`Ошибка: ${res.status}`)
+      })
+      .catch((err) => console.log(err))
+  }
+
+  getUserInfo() { 
+    fetch(`${this.baseUrl}/users/me`, {
+      methid: 'GET',
+      headers: this.headers
+    })
+      .then(response => {
+        if (response.ok) {
+          return response.json()
+        }
+        return Promise.reject(`Ошибка: ${response.status}`)
+      })
+      .then(object => popup.updateUserInfo(object))
+      .catch((err) => console.log(err))
+  }
+  
+  uploadUserInfo(newName, newAbout) {
+    popup.renderLoading(true);
+    return fetch(`${this.baseUrl}/users/me`, {
+      method: 'PATCH',
+      headers: this.headers,
+      body: JSON.stringify({
+          name: newName,
+          about: newAbout
+      })
+    })
+      .then(res => {
+        if (res.ok) {
+          return res.json()
+        }
+        return Promise.reject(`Ошибка: ${res.status}`)
+      })
+      .catch((err) => console.log(err))
+      .finally(() => popup.renderLoading(false));
+  }
+  
+  uploadUserAvatar(link) {
+    popup.renderLoading(true);
+    return fetch(`${this.baseUrl}/users/me/avatar`, {
+      method: 'PATCH',
+      headers: this.headers,
+      body: JSON.stringify({
+        avatar: link
+      })
+    })
+      .then(res => {
+        if (res.ok) {
+          return res.json()
+        }
+        return Promise.reject(`Ошибка: ${res.status}`)
+      })
+      .catch((err) => console.log(err))
+      .finally(() => popup.renderLoading(false));
+  }
+
+  uploadCard(name, link) {
+    return fetch(`${this.baseUrl}/cards`, {
+      method: 'POST',
+      headers: this.headers,
+      body: JSON.stringify({
+        name: name,
+        link: link
+      })
+    })
+      .then(res => {
+        if (res.ok) {
+          return res.json()
+        }
+        return Promise.reject(`Ошибка: ${res.status}`)
+      })
+      .catch((err) => console.log(err))
+  }
+  
+  deleteCard(cardId) {
+    fetch(`${this.baseUrl}/cards/${cardId}`, {
+    method: 'DELETE',
+    headers: this.headers
+    })
+      .then(res => {
+        if (res.ok) {
+          return res.json()
+        }
+        return Promise.reject(`Ошибка: ${res.status}`)
+      })
+      .catch((err) => console.log(err))
+  }
+
+  putLike(cardId) {
+    return fetch(`${this.baseUrl}/cards/like/${cardId}`,{
+      method: 'PUT',
+      headers: this.headers
+    })
+      .then(res => {
+        if (res.ok) {
+          return res.json()
+        }
+        return Promise.reject(`Ошибка: ${res.status}`)
+      })
+      .catch((err) => console.log(err))
+  }
+
+  removeLike(cardId) {
+    return fetch(`${this.baseUrl}/cards/like/${cardId}`,{
+      method: 'DELETE',
+      headers: this.headers
+    })
+      .then(res => {
+        if (res.ok) {
+          return res.json()
+        }
+        return Promise.reject(`Ошибка: ${res.status}`)
+      })
+      .catch((err) => console.log(err))
+  }
+
+  renderLiked(card) {
+    for (let i = 0; i< card.likes.length; i++) {
+      if (card.likes[i]._id === "7a1c4e1b19bca0cf3c99d014") return true
+    }
+    return false
+  }
+
+  renderOwner(card) {
+    if (card.owner._id === "7a1c4e1b19bca0cf3c99d014") return true
+    return false
+  }
+}
+
+class HandlingEvents {
+  constructor() {
+    document.addEventListener('click', this);
+    document.addEventListener('submit', this);
+    document.addEventListener('input', this);
+  }
+
+  handleEvent(event) {
+    if (event.type === 'click') {
+      if (event.target.classList.contains('place-card__like-icon')) {
+        card.like(event);
+      }
+      if (event.target.classList.contains('place-card__delete-icon')) {
+        card.delete(event);
+      }
+      if (event.target.classList.contains('place-card__image')) {
+        card.enhanceImg(event);
+      }
+      if (event.target.hasAttribute('data-target')) {
+        const popupToOpen = new Popup(event.target.dataset.target);
+      
+        popupToOpen.open();
+      }
+      if (event.target.classList.contains('popup__close')) {
+        const id = document.querySelector('.popup_is-opened').id;
+        const popupToClose = new Popup(id);
+      
+        popupToClose.close();
+      }
+    }
+
+    else if (event.type === 'submit') {
+      if (event.target.classList.contains('popup__form')) {
+        const id = document.querySelector('.popup_is-opened').id;
+        const popupToSubmit = new Popup(id);
+        
+        popupToSubmit.formSubmit(event);
+      }
+    }
+    
+    else if (event.type === 'input') {
+      if (event.target.classList.contains('popup__input')) {
+        popup.formValidation(event.target);
       }
     }
   }
 }
+
 const api = new Api({
   baseUrl: 'http://95.216.175.5/cohort4',
   headers: {
@@ -219,103 +360,15 @@ const api = new Api({
   }
 });
 
-
-let places;
 const card = new Card();
 const popup = new Popup();
+let places;
 
-
-document.addEventListener('click', function(event) {
-  const target = event.target;
-  if (target.classList.contains('place-card__like-icon')) {
-    card.like(event);
-  }
-  if (target.classList.contains('place-card__delete-icon')) {
-    card.remove(event);
-  }
-  if (target.classList.contains('place-card__image')) {
-    card.enhanceImg(event);
-  }
-  if (target.hasAttribute('data-target')) {
-    const popupToOpen = new Popup(target.dataset.target);
-
-    popupToOpen.open();
-  }
-  if (target.classList.contains('popup__close')) {
-    const popupToClose = new Popup(document.querySelector('.popup_is-opened').id);
-
-    popupToClose.close();
-  }
-});
-
-document.addEventListener('submit', function(event) {
-  if (event.target.classList.contains('popup__form')) {
-    const id = document.querySelector('.popup_is-opened').id;
-    const popupToSubmit = new Popup(id);
-    
-    popupToSubmit.formSubmit(event);
-  }
-})
-
-document.addEventListener('input', function(event) {
-  if (event.target.classList.contains('popup__input')) {
-    popup.formValidation(event.target);
-  }
-})
-
+new HandlingEvents();
 
 api.getUserInfo();
-api.getInitialCards();
-function show() {
-  // places.initialCards.forEach(() => {
-  //   if
-  // })
-  console.log(places)
-}
-setTimeout(show, 1000);
-// function deleteCards(id) {
-//     fetch(`http://95.216.175.5/cohort4/cards/5da9ceb3a05fd2001fa${id.toString(16)}`, {
-//     method: 'delete',
-//     headers: {
-//       authorization: '3ddccccc-eaef-44d5-912d-395721805785',
-//     }
-//   })
-//     .then((res) => {
-//       if (!res.ok) return
-//       deleteCards(id+1);
-//     });
-// }
-// deleteCards(301478);
-// api.deleteCard('5dab3fada05fd2001fa4bef9');
-// api.uploadCard('asd','https://images.unsplash.com/photo-1567720359666-1cf6be3d5fa3?ixlib=rb-1.2.1&ixid=eyJhcHBfaWQiOjEyMDd9&auto=format&fit=crop&w=633&q=80');
-
-// 7a1c4e1b19bca0cf3c99d014 
-
-/***
- * Здравствуйте
- * Правильно что используете 
- *     this.container.insertAdjacentHTML('beforeend', cardMarkup);
- * Хорошая практика
- * 
- * Хороший класс API кроме метода   renderLoading(isLoading) и updateUserInfo(objectWithNewInfo) они всё портит и их там не должно быть
- * API работает только в с внешними ресурсами. Работу с DOM он не ведёт
- * 
- * Молодцы что используете шаблонизатор при создании карточки
- * 
- * Плохо что создаёте карточку в конструкторе класса Card это плохая практика
- * 
- * Можно лучше. Надо разделать функцию и слушатель, допустим здесь 
- * document.addEventListener('submit', function(event) {
- * 
- * validation.js хорошо бы что бы это был класс
- * 
- * лучше не так 
- * new Popup(document.querySelector('.popup_is-opened').id);
-
- * а вот так 
- * const id = document.querySelector('.popup_is-opened').id;
- * new Popup(id);
- * 
- * Приятная работа. Работа принимается
- * 
- */
+api.getInitialCards()
+  .then(res => {
+    places = new CardList(document.querySelector('.places-list'), res);
+    places.cards = res;
+  });

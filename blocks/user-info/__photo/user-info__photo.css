@@ -8,6 +8,10 @@
   /* background-image: url(../../../images/avatar.jpg); */
 }
 
+.user-info__photo:hover {
+  cursor: pointer;
+}
+
 @media screen and (max-width: 980px) {
   .user-info__photo {
     margin-top: 40px;
