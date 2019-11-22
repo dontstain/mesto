@@ -1,9 +1,0 @@
-@import url('./_hidden/error-message_hidden.css');
-
-.error-message {
-    display: block;
-    margin-top: 6px;
-    font-size: 12px;
-    line-height: 15px;
-    color: #FF0000;
-}
