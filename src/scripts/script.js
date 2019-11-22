@@ -1,3 +1,6 @@
+import "../pages/style.css";
+const serverUrl = NODE_ENV === 'development' ? 'http://praktikum.tk/cohort4' : 'https://praktikum.tk/cohort4';
+
 class Card {
   constructor(cardObj) {
     this.card = cardObj;
@@ -353,7 +356,7 @@ class HandlingEvents {
 }
 
 const api = new Api({
-  baseUrl: 'http://95.216.175.5/cohort4',
+  baseUrl: 'serverUrl',
   headers: {
     authorization: '3ddccccc-eaef-44d5-912d-395721805785',
     'Content-Type': 'application/json'
