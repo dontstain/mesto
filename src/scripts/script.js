@@ -356,7 +356,7 @@ class HandlingEvents {
 }
 
 const api = new Api({
-  baseUrl: 'serverUrl',
+  baseUrl: serverUrl,
   headers: {
     authorization: '3ddccccc-eaef-44d5-912d-395721805785',
     'Content-Type': 'application/json'

@@ -24,17 +24,17 @@ module.exports = {
       'postcss-loader']
     },
     {
-      test: /\.(png|jpg|gif|ico|svg)$/,
-      use: [
-        'file-loader?name=../images/[name].[ext]', 
-        {
-          loader: 'image-webpack-loader',
-          options: {
-            bypassOnDebug: true, 
-            disable: true,
-          }
-        },
-      ]
+      test: /\.(gif|png|jpe?g|svg)$/i,
+        use: [
+          'file-loader',
+          {
+            loader: 'image-webpack-loader',
+            options: {
+              bypassOnDebug: true, 
+              disable: true, 
+            },
+          },
+        ]
      },
      {
       test: /\.(eot|ttf|woff|woff2)$/,
